@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import QRCode from 'qrcode'
 import { useRouter } from 'next/navigation'
+import { generateProductCode } from '@/lib/product-code'
 
 interface Brand {
   _id: string
@@ -54,7 +55,6 @@ export default function AddProductDetails() {
   const [categories, setCategories] = useState<Category[]>([])
   const [taxes, setTaxes] = useState<Tax[]>([])
   const [units, setUnits] = useState<Unit[]>([])
-  const [nextProductCode, setNextProductCode] = useState<number>(1)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
@@ -84,11 +84,15 @@ export default function AddProductDetails() {
         setTaxes(taxData || [])
         setUnits(unitData || [])
 
-        const maxCode = productsData.reduce(
-          (max: number, product: any) => Math.max(max, product.productCode),
-          0
-        )
-        setNextProductCode(maxCode + 1)
+        // Generate initial product code based on the first category or default
+        const existingCodes = productsData.map((p: any) => p.productCode) || []
+        if (categoryData.length > 0) {
+          const initialCode = generateProductCode(
+            categoryData[0].name,
+            existingCodes
+          )
+          setProductCode(initialCode)
+        }
       } catch (error) {
         console.error('Error fetching data:', error)
       } finally {
@@ -97,6 +101,21 @@ export default function AddProductDetails() {
     }
     fetchData()
   }, [])
+
+  useEffect(() => {
+    if (category) {
+      const fetchProducts = async () => {
+        const productsRes = await fetch('/api/products')
+        const productsData = await productsRes.json()
+        const existingCodes = productsData.map((p: any) => p.productCode) || []
+        const selectedCategory =
+          categories.find((c) => c._id === category)?.name || ''
+        const newCode = generateProductCode(selectedCategory, existingCodes)
+        setProductCode(newCode)
+      }
+      fetchProducts()
+    }
+  }, [category, categories])
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -112,11 +131,6 @@ export default function AddProductDetails() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const code = parseInt(productCode, 10)
-    if (isNaN(code) || code < 1 || code > 999) {
-      alert('Product code must be between 001 and 999!')
-      return
-    }
 
     if (
       !productName ||
@@ -135,7 +149,7 @@ export default function AddProductDetails() {
 
     const requestData = {
       productName,
-      productCode: code,
+      productCode: parseInt(productCode.slice(2)), // Remove prefix for storage (e.g., "OL001" -> 1)
       productDescription: productDescription || '',
       brand,
       category,
@@ -206,16 +220,17 @@ export default function AddProductDetails() {
   return (
     <div className='p-6 dark:bg-gray-900 bg-gray-100 min-h-screen'>
       <div className='max-w-2xl mx-auto'>
-        <h1 className='text-3xl font-bold text-gray-900 dark:text-white mb-6'>
+        <h1 className='text-3xl font-bold text-gray-900 dark:text-white mb-1'>
           Add Product
         </h1>
-        <form onSubmit={handleSubmit} className='space-y-6'>
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
-            {/* Row 1 */}
+        <p className='text-gray-600 text-xs'>Lorem ipsum dolor sit amet.</p>
+        <form onSubmit={handleSubmit} className=' mt-6'>
+          {/* Row 1: Product Name and Category */}
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
             <div>
               <Label
                 htmlFor='productName'
-                className='text-gray-700 dark:text-gray-300 block mb-2'
+                className='text-gray-700 dark:text-gray-600 block mb-2'
               >
                 Product Name
               </Label>
@@ -231,89 +246,8 @@ export default function AddProductDetails() {
             </div>
             <div>
               <Label
-                htmlFor='productCode'
-                className='text-gray-700 dark:text-gray-300 block mb-2'
-              >
-                Product Code
-              </Label>
-              <Input
-                id='productCode'
-                type='text'
-                value={productCode}
-                onChange={(e) => {
-                  let value = e.target.value.replace(/\D/g, '')
-                  if (value === '') {
-                    setProductCode('')
-                    return
-                  }
-                  const num = parseInt(value, 10)
-                  if (num >= 1 && num <= 999) {
-                    setProductCode(num.toString().padStart(3, '0'))
-                  } else if (num > 999) {
-                    alert('Product code must be between 001 and 999!')
-                    setProductCode('999')
-                  }
-                }}
-                onBlur={() => {
-                  if (productCode === '' || parseInt(productCode, 10) < 1) {
-                    setProductCode(nextProductCode.toString().padStart(3, '0'))
-                  }
-                }}
-                placeholder={`Next available: ${nextProductCode
-                  .toString()
-                  .padStart(3, '0')}`}
-                className='w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2 rounded-md'
-                required
-              />
-            </div>
-            <div>
-              <Label
-                htmlFor='productDescription'
-                className='text-gray-700 dark:text-gray-300 block mb-2'
-              >
-                Product Description
-              </Label>
-              <Textarea
-                id='productDescription'
-                name='productDescription'
-                value={productDescription}
-                onChange={handleChange}
-                placeholder='Enter product description'
-                className='w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2 rounded-md h-12'
-                required
-              />
-            </div>
-
-            {/* Row 2 */}
-            <div>
-              <Label
-                htmlFor='brand'
-                className='text-gray-700 dark:text-gray-300 block mb-2'
-              >
-                Brand
-              </Label>
-              <Select onValueChange={setBrand} value={brand} required>
-                <SelectTrigger className='w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2 rounded-md'>
-                  <SelectValue placeholder='Select a brand' />
-                </SelectTrigger>
-                <SelectContent>
-                  {brands.map((b) => (
-                    <SelectItem key={b._id} value={b._id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                  {brands.length === 0 && (
-                    <SelectItem value='no-brand' disabled>
-                      No brands available
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label
                 htmlFor='category'
-                className='text-gray-700 dark:text-gray-300 block mb-2'
+                className='text-gray-700 dark:text-gray-600 block mb-2'
               >
                 Category
               </Label>
@@ -335,44 +269,109 @@ export default function AddProductDetails() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Row 2: Product Description (full width) */}
+          <div className='mt-5'>
+            <Label
+              htmlFor='productDescription'
+              className='text-gray-700 dark:text-gray-600 block mb-2'
+            >
+              Product Description
+            </Label>
+            <Textarea
+              id='productDescription'
+              name='productDescription'
+              value={productDescription}
+              onChange={handleChange}
+              placeholder='Enter product description'
+              className='w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2 rounded-md h-24'
+              required
+            />
+          </div>
+
+          {/* Row 3: Product Code and Brand */}
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mt-5'>
             <div>
               <Label
-                htmlFor='tax'
-                className='text-gray-700 dark:text-gray-300 block mb-2'
+                htmlFor='productCode'
+                className='text-gray-700 dark:text-gray-600 block mb-2'
               >
-                GST
+                Product Code
               </Label>
-              <Select onValueChange={setTax} value={tax} required>
+              <Input
+                id='productCode'
+                value={productCode}
+                readOnly // Make it non-editable
+                placeholder={productCode || 'Auto-assigned based on category'}
+                className='w-full border-gray-300 dark:border-gray-600 dark:bg-gray-200 dark:text-gray-900 p-2 rounded-md cursor-not-allowed'
+              />
+            </div>
+            <div>
+              <Label
+                htmlFor='brand'
+                className='text-gray-700 dark:text-gray-600 block mb-2'
+              >
+                Brand
+              </Label>
+              <Select onValueChange={setBrand} value={brand} required>
                 <SelectTrigger className='w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2 rounded-md'>
-                  <SelectValue placeholder='Select GST' />
+                  <SelectValue placeholder='Select a brand' />
                 </SelectTrigger>
                 <SelectContent>
-                  {taxes.map((t) => (
-                    <SelectItem key={t._id} value={t._id}>
-                      {t.name}
+                  {brands.map((b) => (
+                    <SelectItem key={b._id} value={b._id}>
+                      {b.name}
                     </SelectItem>
                   ))}
-                  {taxes.length === 0 && (
-                    <SelectItem value='no-taxes' disabled>
-                      No taxes available
+                  {brands.length === 0 && (
+                    <SelectItem value='no-brand' disabled>
+                      No brands available
                     </SelectItem>
                   )}
                 </SelectContent>
               </Select>
             </div>
+          </div>
 
-            {/* Row 3 - Inventory Management Fields */}
-            <div className='col-span-full'>
-              <Separator className='my-6'>
-                <span className='text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 px-2'>
-                  Inventory Management Fields
-                </span>
-              </Separator>
-            </div>
+          {/* Row 4: GST */}
+          <div className='mt-5'>
+            <Label
+              htmlFor='tax'
+              className='text-gray-700 dark:text-gray-600 block mb-2'
+            >
+              GST
+            </Label>
+            <Select onValueChange={setTax} value={tax} required>
+              <SelectTrigger className='w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2 rounded-md'>
+                <SelectValue placeholder='Select GST' />
+              </SelectTrigger>
+              <SelectContent>
+                {taxes.map((t) => (
+                  <SelectItem key={t._id} value={t._id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+                {taxes.length === 0 && (
+                  <SelectItem value='no-taxes' disabled>
+                    No taxes available
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Row 3 - Inventory Management Fields */}
+          <div className='col-span-full mt-5'>
+            <span className='text-muted text-xs dark:text-muted bg-white dark:bg-purple-300 px-3 py-2 rounded-md'>
+              Inventory Management Fields
+            </span>
+          </div>
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-5'>
             <div>
               <Label
                 htmlFor='sellingPrice'
-                className='text-gray-700 dark:text-gray-300 block mb-2'
+                className='text-gray-700 dark:text-gray-600 block mb-2'
               >
                 Selling Price
               </Label>
@@ -387,10 +386,11 @@ export default function AddProductDetails() {
                 required
               />
             </div>
+
             <div>
               <Label
                 htmlFor='productionPrice'
-                className='text-gray-700 dark:text-gray-300 block mb-2'
+                className='text-gray-700 dark:text-gray-600 block mb-2'
               >
                 Production Price
               </Label>
@@ -405,10 +405,11 @@ export default function AddProductDetails() {
                 required
               />
             </div>
+
             <div>
               <Label
                 htmlFor='unit'
-                className='text-gray-700 dark:text-gray-300 block mb-2'
+                className='text-gray-700 dark:text-gray-600 block mb-2'
               >
                 Unit
               </Label>
@@ -430,12 +431,13 @@ export default function AddProductDetails() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Row 4 */}
+          </div>
+          {/* Total quantity field */}
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mt-5'>
             <div>
               <Label
                 htmlFor='totalQty'
-                className='text-gray-700 dark:text-gray-300 block mb-2'
+                className='text-gray-700 dark:text-gray-600 block mb-2'
               >
                 Total Quantity
               </Label>
@@ -450,10 +452,12 @@ export default function AddProductDetails() {
                 required
               />
             </div>
+
+            {/* Alert Quantity */}
             <div>
               <Label
                 htmlFor='alertQty'
-                className='text-gray-700 dark:text-gray-300 block mb-2'
+                className='text-gray-700 dark:text-gray-600 block mb-2'
               >
                 Alert Quantity
               </Label>
@@ -468,7 +472,6 @@ export default function AddProductDetails() {
                 required
               />
             </div>
-            <div className='hidden lg:block'></div>
           </div>
 
           {/* QR Code Section */}
@@ -493,16 +496,16 @@ export default function AddProductDetails() {
             )}
           </div>
 
-          <div className='  mt-6'>
+          <div className='mt-6'>
             <Button
               type='submit'
-              className='bg-blue-600 hover:bg-blue-700 text-white w-full py-2 rounded-md mb-2'
+              className='bg-blue-600 hover:bg-blue-700 text-white w-full py-2 rounded-md mb-3'
             >
               Add Product
             </Button>
             <Button
               type='button'
-              onClick={() => router.push('/add-product')}
+              onClick={() => router.push('/dashboard/add-product')}
               className='bg-gray-600 hover:bg-gray-700 text-white w-full py-2 rounded-md'
             >
               Cancel
