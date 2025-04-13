@@ -149,7 +149,7 @@ export default function AddProductDetails() {
 
     const requestData = {
       productName,
-      productCode: parseInt(productCode.slice(2)), // Remove prefix for storage (e.g., "OL001" -> 1)
+      productCode, // Save the full string (e.g., "BT001") instead of parsing
       productDescription: productDescription || '',
       brand,
       category,

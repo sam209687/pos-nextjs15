@@ -1,8 +1,9 @@
 import mongoose, { Schema, Document } from 'mongoose'
+import { unique } from 'next/dist/build/utils'
 
 export interface IProduct extends Document {
   productName: string
-  productCode: number
+  productCode: string // Changed to string to store full code (e.g., "BT001")
   productDescription: string
   brand: string // Reference to Brand _id
   category: string // Reference to Category _id
@@ -18,7 +19,7 @@ export interface IProduct extends Document {
 const ProductSchema: Schema = new Schema(
   {
     productName: { type: String, required: true },
-    productCode: { type: Number, required: true, min: 1, max: 999 },
+    productCode: { type: String, required: true, unique: true },
     productDescription: { type: String, required: true },
     brand: { type: Schema.Types.ObjectId, ref: 'Brand', required: true },
     category: { type: Schema.Types.ObjectId, ref: 'Category', required: true },

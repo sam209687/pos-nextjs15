@@ -48,6 +48,7 @@ export default function AddProductPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [productToDelete, setProductToDelete] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  // const [categories, setCategories] = useState<Category[]>([]);
   const router = useRouter()
 
   useEffect(() => {
